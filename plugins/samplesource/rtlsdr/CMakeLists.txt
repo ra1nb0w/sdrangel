@@ -45,6 +45,10 @@ add_library(${TARGET_NAME} SHARED
 	${rtlsdr_SOURCES}
 )
 
+if(ENABLE_EXTERNAL_LIBRARIES)
+    add_dependencies(${TARGET_NAME} rtlsdr)
+endif()
+
 target_link_libraries(${TARGET_NAME}
         Qt5::Core
         ${TARGET_LIB}

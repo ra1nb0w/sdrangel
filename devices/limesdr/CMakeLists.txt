@@ -28,4 +28,8 @@ target_link_libraries(limesdrdevice
     sdrbase
 )
 
+if(ENABLE_EXTERNAL_LIBRARIES)
+    add_dependencies(limesdrdevice limesuite)
+endif()
+
 install(TARGETS limesdrdevice DESTINATION ${INSTALL_LIB_DIR})

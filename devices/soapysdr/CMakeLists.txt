@@ -1,14 +1,14 @@
 project(soapysdrdevice)
 
 set(soapysdrdevice_SOURCES
-	devicesoapysdr.cpp
+    devicesoapysdr.cpp
     devicesoapysdrscan.cpp
     devicesoapysdrshared.cpp
     devicesoapysdrparams.cpp
 )
 
 set(soapysdrdevice_HEADERS
-	devicesoapysdr.h
+    devicesoapysdr.h
     devicesoapysdrscan.h
     devicesoapysdrshared.h
     devicesoapysdrparams.h
@@ -29,5 +29,9 @@ target_link_libraries(soapysdrdevice
     ${SOAPYSDR_LIBRARY}
     sdrbase
 )
+
+if(ENABLE_EXTERNAL_LIBRARIES)
+    add_dependencies(soapysdrdevice soapysdr)
+endif()
 
 install(TARGETS soapysdrdevice DESTINATION ${INSTALL_LIB_DIR})

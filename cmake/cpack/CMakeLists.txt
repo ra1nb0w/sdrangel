@@ -171,15 +171,75 @@ elseif(LINUX AND BUNDLE)
     set (CPACK_RPM_PACKAGE_ARCHITECTURE ${CMAKE_SYSTEM_PROCESSOR})
   endif (RPMBUILDER)
 
-elseif((WIN32 OR MINGW) AND BUNDLE)
+elseif(WIN32 OR MINGW)
 
-  #set(CMAKE_INSTALL_UCRT_LIBRARIES TRUE)
+  # Copy Qt Plugins; fixup_bundle doesn't do that
+  install (
+    DIRECTORY
+    "${QT_PLUGINS_DIR}/platforms"
+    "${QT_PLUGINS_DIR}/audio"
+    "${QT_PLUGINS_DIR}/accessible"
+    "${QT_PLUGINS_DIR}/imageformats"
+    "${QT_PLUGINS_DIR}/mediaservice"
+    "${QT_PLUGINS_DIR}/playlistformats"
+    "${QT_PLUGINS_DIR}/styles"
+    "${QT_PLUGINS_DIR}/iconengines"
+    DESTINATION "${INSTALL_BIN_DIR}"
+    CONFIGURATIONS Release MinSizeRel
+    COMPONENT runtime
+    FILES_MATCHING PATTERN "*${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    PATTERN "*minimal*${CMAKE_SHARED_LIBRARY_SUFFIX}" EXCLUDE
+    PATTERN "*offscreen*${CMAKE_SHARED_LIBRARY_SUFFIX}" EXCLUDE
+    PATTERN "*quick*${CMAKE_SHARED_LIBRARY_SUFFIX}" EXCLUDE
+    PATTERN "*_debug${CMAKE_SHARED_LIBRARY_SUFFIX}" EXCLUDE
+    )
 
-  list(APPEND CPACK_GENERATOR "NSIS")
-  set(CPACK_NSIS_PACKAGE_NAME "${APPLICATION_NAME}")
-  set(CPACK_NSIS_CONTACT "${APPLICATION_MAINTAINER}")
-  set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
-  set(CPACK_NSIS_MODIFY_PATH ON)
+  # TODO we need a way to fixup_bundle() on the build bin/ directory without call install
+  install(CODE "
+    include(BundleUtilities)
+    fixup_bundle(\"${SDRANGEL_BINARY_BIN_DIR}/sdrangel${CMAKE_EXECUTABLE_SUFFIX}\" \"\" \"${WINDOWS_FIXUP_BUNDLE_LIB_DIRS}\")
+  " COMPONENT Runtime)
+
+  if(BUNDLE)
+    install(CODE "
+      include(BundleUtilities)
+      fixup_bundle(\"\${CMAKE_INSTALL_PREFIX}/sdrangel${CMAKE_EXECUTABLE_SUFFIX}\" \"\" \"${WINDOWS_FIXUP_BUNDLE_LIB_DIRS}\")
+
+      # remove *.lib files
+      # TODO find a better way
+      file(GLOB NSIS_REMOVE_LIB \"\${CMAKE_INSTALL_PREFIX}/*.lib\")
+      foreach(file \${NSIS_REMOVE_LIB})
+        file(REMOVE \"\${file}\")
+      endforeach()
+      file(GLOB NSIS_REMOVE_LIB \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_PLUGINS_DIR}/*.lib\")
+      foreach(file \${NSIS_REMOVE_LIB})
+        file(REMOVE \"\${file}\")
+      endforeach()
+      file(GLOB NSIS_REMOVE_LIB \"\${CMAKE_INSTALL_PREFIX}/${INSTALL_PLUGINSSRV_DIR}/*.lib\")
+      foreach(file \${NSIS_REMOVE_LIB})
+        file(REMOVE \"\${file}\")
+      endforeach()
+    " COMPONENT Runtime)
+
+    list(APPEND CPACK_GENERATOR "ZIP;NSIS")
+    set(CPACK_MONOLITHIC_INSTALL ON)
+    set(CPACK_NSIS_HELP_LINK ${CPACK_PACKAGE_CONTACT})
+    set(CPACK_NSIS_URL_INFO_ABOUT ${CPACK_PACKAGE_CONTACT})
+    set(CPACK_NSIS_CONTACT ${APPLICATION_MAINTAINER})
+    set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/cmake/cpack/sdrangel_icon.ico")
+    set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/cmake/cpack/sdrangel_icon.ico")
+    set(CPACK_NSIS_PACKAGE_NAME "${APPLICATION_NAME}")
+    set(CPACK_NSIS_CONTACT "${APPLICATION_MAINTAINER}")
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    set(CPACK_NSIS_MODIFY_PATH ON)
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY ${APPLICATION_NAME})
+    set(CPACK_PACKAGE_INSTALL_REGISTRY_KEY ${APPLICATION_NAME})
+    set(CPACK_PACKAGE_EXECUTABLES "${CMAKE_PROJECT_NAME};${APPLICATION_NAME}")
+    list(APPEND CPACK_NSIS_EXTRA_INSTALL_COMMANDS "
+      ExecWait '$INSTDIR\\\\${VCREDIST_FILE} /passive /norestart'
+      Delete '$INSTDIR\\\\${VCREDIST_FILE}'
+    ")
+  endif()
 
 endif(APPLE AND BUNDLE AND BUILD_GUI)
 
