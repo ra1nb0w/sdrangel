@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.1.0)
 
 # force 64bit on windows because we have only that library
 # TODO discuss because, at this days, a dsp software should be 64bit
-if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM AND NOT CMAKE_C_COMPILER AND NOT CMAKE_CXX_COMPILER)
-  set(CMAKE_GENERATOR_PLATFORM "x64" CACHE INTERNAL "")
-endif()
+#if(WIN32 AND NOT CMAKE_GENERATOR_PLATFORM AND NOT CMAKE_C_COMPILER AND NOT CMAKE_CXX_COMPILER)
+#  set(CMAKE_GENERATOR_PLATFORM "x64" CACHE INTERNAL "")
+#endif()
 
 project(sdrangel)
 
