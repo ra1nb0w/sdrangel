@@ -29,4 +29,8 @@ target_link_libraries(bladerf1device
     sdrbase
 )
 
+if(ENABLE_EXTERNAL_LIBRARIES)
+    add_dependencies(bladerf1device bladerf)
+endif()
+
 install(TARGETS bladerf1device DESTINATION ${INSTALL_LIB_DIR})

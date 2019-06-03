@@ -20,6 +20,12 @@ include_directories(
     ${LIBPERSEUS_INCLUDE_DIR}
 )
 
+if(ENABLE_EXTERNAL_LIBRARIES)
+    include_directories(
+        ${LIBUSB_INCLUDE_DIR}
+    )
+endif()
+
 if(NOT SERVER_MODE)
     set(perseus_SOURCES
         ${perseus_SOURCES}

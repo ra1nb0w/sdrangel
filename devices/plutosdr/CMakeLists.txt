@@ -19,6 +19,7 @@ set(plutosdrdevice_HEADERS
 include_directories(
     ${LIBIIO_INCLUDE_DIR}
     ${ICONV_INCLUDE_DIR}
+    ${Boost_INCLUDE_DIRS}
 )
 
 add_library(plutosdrdevice SHARED
@@ -33,5 +34,9 @@ target_link_libraries(plutosdrdevice
     ${LIBIIO_LIBRARIES}
     ${ICONV_LIBRARY}
 )
+
+if(ENABLE_EXTERNAL_LIBRARIES)
+    add_dependencies(plutosdrdevice iio)
+endif()
 
 install(TARGETS plutosdrdevice DESTINATION ${INSTALL_LIB_DIR})

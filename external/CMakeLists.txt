@@ -6,11 +6,18 @@
 # we choose add_dependencies() to the target.
 # other viable solution is to use execute_process() during config
 # but make the configuration dirty
+#
+# TODO
+#   - Copyright files
+#   - when install() we have also CMake* directories..see how to avoid it
+#   - SoapySDR modules, needs lib/SoapySDR/modules0.7/ as folder
+#   - SoapySDR sdrplay module, needs check for binary (not distribuitable)
+#   - XTRX if someone needs it
+#   - eventually add udev rules per driver
 
 # which version/tag/checkout to use
-# 0.8.1
-set(CODEC2_TAG ff5841a18bfd9df0e8a250dc57fb7388cabccda1)
-set(CM256CC_TAG 19f023d9d6c6f1a2e7dc5bcf466a1424c7918de4)
+set(CODEC2_TAG ff5841a18bfd9df0e8a250dc57fb7388cabccda1) # 0.8.1
+set(CM256CC_TAG f21e8bc1e9afdb0b28672743dcec111aec1d32d9)
 set(MBELIB_TAG 9a04ed5c78176a9965f3d43f7aa1b1f5330e771f)
 set(SERIALDV_TAG abd65a0fc2d5339808194862d14119b0cba70424)
 set(DSDCC_TAG a0f46941383120904c7211cf0fd94f04e2abfe73)
@@ -20,6 +27,16 @@ set(RTLSDR_UDEV OFF)
 set(LIMESUITE_TAG "v19.04.0")
 set(SOAPYSDR_TAG "soapy-sdr-0.7.1")
 set(SOAPYSDR_SDRPLAY_TAG "soapy-sdrplay-0.2.0")
+set(SOAPYSDR_AUDIO_TAG "soapy-audio-0.1.1")
+set(SOAPYSDR_REMOTE_TAG "soapy-remote-0.5.1")
+set(PERSEUSSDR_TAG 4aa28aece56682cd32bc457d033bf13a4302c0d4)
+set(AIRSPY_TAG bfb667080936ca5c2d23b3282f5893931ec38d3f)
+set(AIRSPYHF_TAG "1.1.5")
+set(HACKRF_TAG "v2018.01.1")
+set(LIBXML2_TAG "v2.9.9")
+set(IIO_TAG "v0.18")
+#set(BLADERF_TAG "2018.12-rc2")
+set(BLADERF_TAG 896d2431b3a35a4b31b6e729386202ebf5fdc5c0)
 
 # For some external project macros
 include(ExternalProject)
@@ -65,15 +82,14 @@ macro(makeCopy src dest target)
 endmacro()
 
 if(WIN32)
-  # install runtime from Qt directory
-  # to automazie NSIS see
-  # https://github.com/ctrlaltca/Cockatrice/blob/679bbd09280029bcd5ea7e2201edd60421fd026e/cmake/NSIS.template.in
-  if(VS2015)
-    set(VCREDIST_FILE "vcredist_msvc2015_${CMAKE_GENERATOR_PLATFORM}${CMAKE_EXECUTABLE_SUFFIX}" CACHE INTERNAL "")
-  elseif(VS2017)
-    set(VCREDIST_FILE "vcredist_msvc2017_${CMAKE_GENERATOR_PLATFORM}${CMAKE_EXECUTABLE_SUFFIX}" CACHE INTERNAL "")
+
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(VCREDIST_FILE "vc_redist.x64${CMAKE_EXECUTABLE_SUFFIX}" CACHE INTERNAL "")
+  # maybe add arm architecture
+  else()
+    set(VCREDIST_FILE "vc_redist.x86${CMAKE_EXECUTABLE_SUFFIX}" CACHE INTERNAL "")
   endif()
-  install(FILES "${Qt5_DIR}/../../../../../vcredist/${VCREDIST_FILE}" DESTINATION "${INSTALL_BIN_DIR}")
+  install(FILES "${EXTERNAL_LIBRARY_FOLDER}/vcredist/${VCREDIST_FILE}" DESTINATION "${INSTALL_BIN_DIR}")
 endif(WIN32)
 
 # probably build with mingw64 on windows
@@ -101,8 +117,14 @@ if(NOT WIN32)
     makeCopy("${binary_dir}/codec2/version.h" "${source_dir}/src/version.h" codec2)
     # some source include "codec2/comp.h" and some without codec2
     makeLink("${source_dir}/src" "${source_dir}/src/codec2" codec2)
-    install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
-      FILES_MATCHING PATTERN "libcodec2${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    if(APPLE)
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/src/")
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libcodec2*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    else()
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libcodec2${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
   endif()
 endif()
 
@@ -111,7 +133,11 @@ ExternalProject_Add(cm256cc
     GIT_REPOSITORY https://github.com/f4exb/cm256cc.git
     GIT_TAG ${CM256CC_TAG}
     PREFIX "${EXTERNAL_BUILD_LIBRARIES}/cm256cc"
-    CMAKE_ARGS -DBUILD_TOOLS=OFF ${DEFAULT_OUTPUT_DIRECTORIES}
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+      -DBUILD_TOOLS=OFF
+      -DBoost_INCLUDE_DIR=${Boost_INCLUDE_DIRS}
+      -DBoost_INCLUDE_DIRS=${Boost_INCLUDE_DIRS}
+      -DENABLE_DISTRIBUTION=ON
     INSTALL_COMMAND ""
     TEST_COMMAND ""
 )
@@ -124,8 +150,14 @@ if(WIN32)
  install(FILES "${SDRANGEL_BINARY_BIN_DIR}/cm256cc${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
 else()
   set(CM256CC_LIBRARIES "${binary_dir}/libcm256cc${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
-  install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
-    FILES_MATCHING PATTERN "libcm256cc${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+  if(APPLE)
+    install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+      FILES_MATCHING PATTERN "libcm256cc*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}")
+  else()
+    install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+      FILES_MATCHING PATTERN "libcm256cc${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+  endif(APPLE)
 endif()
 
 set(USE_MBELIB OFF)
@@ -147,8 +179,14 @@ if(WIN32)
   install(FILES "${SDRANGEL_BINARY_BIN_DIR}/mbe${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
 else()
   set(LIBMBE_LIBRARIES "${binary_dir}/libmbe${CMAKE_SHARED_LIBRARY_SUFFIX}")
-  install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
-    FILES_MATCHING PATTERN "libmbe${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+  if(APPLE)
+    install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+      FILES_MATCHING PATTERN "libmbe*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}")
+  else()
+    install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+      FILES_MATCHING PATTERN "libmbe${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+  endif(APPLE)
 endif()
 
 if(WIN32 OR LINUX)
@@ -173,8 +211,14 @@ if(WIN32 OR LINUX)
       # because sdrbase/dsp/dvserialworker.h use dsp/dvcontroller.h
       # so we need a link
       makeLink("${source_dir}" "${source_dir}/dsp" serialdv)
-      install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
-        FILES_MATCHING PATTERN "libserialdv${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+      if(APPLE)
+        install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+          FILES_MATCHING PATTERN "libserialdv*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}")
+      else()
+         install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+          FILES_MATCHING PATTERN "libserialdv${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+      endif(APPLE)
     endif()
 endif()
 
@@ -201,31 +245,41 @@ if(WIN32)
   install(FILES "${SDRANGEL_BINARY_BIN_DIR}/dsdcc${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
 else()
   set(LIBDSDCC_LIBRARIES "${binary_dir}/libdsdcc${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
-  install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
-    FILES_MATCHING PATTERN "libdsdcc${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+  if(APPLE)
+    install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+      FILES_MATCHING PATTERN "libdsdcc*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/")
+  else()
+    install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+      FILES_MATCHING PATTERN "libdsdcc${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+  endif(APPLE)
 endif()
 
-if(ENABLE_RTLSDR)
-  if(WIN32)
-    ExternalProject_Add(pthreads4w
-      GIT_REPOSITORY https://git.code.sf.net/p/pthreads4w/code
-      GIT_TAG ${PTHREADS4W_TAG}
-      PREFIX "${EXTERNAL_BUILD_LIBRARIES}/pthreads4w"
-      BUILD_IN_SOURCE 1
-      CONFIGURE_COMMAND ""
-      BUILD_COMMAND nmake VC
-      INSTALL_COMMAND ""
-      TEST_COMMAND ""
-    )
-    ExternalProject_Get_Property(pthreads4w source_dir binary_dir)
-    set(RTLSDR_DEPENDS pthreads4w)
-    set(PTHREADS4W_FOUND ON CACHE INTERNAL "")
-    set(PTHREADS4W_INCLUDE_DIR "${source_dir}" CACHE INTERNAL "")
-    set(PTHREADS4W_LIBRARIES "${source_dir}/pthreadVC2.lib" CACHE INTERNAL "")
-    makeCopy("${source_dir}/pthreadVC2.dll" "${SDRANGEL_BINARY_BIN_DIR}/pthreadVC2.dll" pthreads4w)
-    install(FILES "${source_dir}/pthreadVC2${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
-  endif(WIN32)
+# requirements needed by many packages on windows
+if(WIN32)
+  ExternalProject_Add(pthreads4w
+    GIT_REPOSITORY https://git.code.sf.net/p/pthreads4w/code
+    GIT_TAG ${PTHREADS4W_TAG}
+    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/pthreads4w"
+    PATCH_COMMAND ${CMAKE_COMMAND} -E touch "<SOURCE_DIR>/COPYING.LIB"
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND nmake VC
+    INSTALL_COMMAND ""
+    TEST_COMMAND ""
+  )
+  ExternalProject_Get_Property(pthreads4w source_dir binary_dir)
+  set(PTHREADS4W_DEPENDS pthreads4w)
+  set(PTHREADS4W_FOUND ON CACHE INTERNAL "")
+  set(PTHREADS4W_INCLUDE_DIR "${source_dir}" CACHE INTERNAL "")
+  set(PTHREADS4W_LIBRARIES "${source_dir}/pthreadVC2.lib" CACHE INTERNAL "")
+  makeCopy("${source_dir}/pthreadVC2${CMAKE_SHARED_LIBRARY_SUFFIX}" "${SDRANGEL_BINARY_BIN_DIR}/pthreadVC2${CMAKE_SHARED_LIBRARY_SUFFIX}" pthreads4w)
+  # needed by bladerf
+  makeCopy("${source_dir}/pthreadVC2${CMAKE_SHARED_LIBRARY_SUFFIX}" "${source_dir}/dll/x64/pthreadVC2${CMAKE_SHARED_LIBRARY_SUFFIX}" pthreads4w)
+  install(FILES "${source_dir}/pthreadVC2${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+endif(WIN32)
 
+if(ENABLE_RTLSDR)
   if(WIN32)
     set(RTLSDR_LIBUSB_INCLUDE "${LIBUSB_INCLUDE_DIR}/libusb-1.0")
   else()
@@ -235,7 +289,7 @@ if(ENABLE_RTLSDR)
   ExternalProject_Add(rtlsdr
     GIT_REPOSITORY https://github.com/osmocom/rtl-sdr.git
     GIT_TAG ${RTLSDR_TAG}
-    DEPENDS ${RTLSDR_DEPENDS}
+    DEPENDS ${PTHREADS4W_DEPENDS}
     PREFIX "${EXTERNAL_BUILD_LIBRARIES}/rtlsdr"
     CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
         -DINSTALL_UDEV_RULES=${RTLSDR_UDEV}
@@ -254,8 +308,14 @@ if(ENABLE_RTLSDR)
     install(FILES "${SDRANGEL_BINARY_BIN_DIR}/rtlsdr${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
   else()
     set(LIBRTLSDR_LIBRARIES "${binary_dir}/src/librtlsdr${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
-    install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
-      FILES_MATCHING PATTERN "librtlsdr${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "librtlsdr*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/src/")
+    else()
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "librtlsdr${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
   endif()
 endif(ENABLE_RTLSDR)
 
@@ -273,6 +333,7 @@ if(ENABLE_LIMESUITE)
         -DENABLE_OCTAVE=OFF
         -DENABLE_QUICKTEST=OFF
         -DENABLE_EXAMPLES=OFF
+        -DENABLE_SIMD_FLAGS=SSE3
     INSTALL_COMMAND ""
     TEST_COMMAND ""
   )
@@ -284,8 +345,14 @@ if(ENABLE_LIMESUITE)
     install(FILES "${SDRANGEL_BINARY_BIN_DIR}/LimeSuite${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
   else()
     set(LIMESUITE_LIBRARY "${binary_dir}/src/libLimeSuite${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
-    install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
-      FILES_MATCHING PATTERN "libLimeSuite${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libLimeSuite*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/src/")
+    else()
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libLimeSuite${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
   endif()
 endif(ENABLE_LIMESUITE)
 
@@ -309,11 +376,48 @@ if(ENABLE_SOAPYSDR)
     install(FILES "${SDRANGEL_BINARY_BIN_DIR}/SoapySDR${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
   else()
     set(SOAPYSDR_LIBRARY "${binary_dir}/lib/libSoapySDR${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
-    install(DIRECTORY "${binary_dir}/lib/" DESTINATION "${INSTALL_LIB_DIR}"
-      FILES_MATCHING PATTERN "libSoapySDR${CMAKE_SHARED_LIBRARY_SUFFIX}*")
-  endif()
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/lib/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libSoapySDR*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/lib/")
+    else()
+      install(DIRECTORY "${binary_dir}/lib/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libSoapySDR${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif(WIN32)
 
-  # TODO: add sdrplay with binary
+  if(OFF)
+  ExternalProject_Add(soapysdraudio
+    GIT_REPOSITORY https://github.com/pothosware/SoapyAudio.git
+    GIT_TAG ${SOAPYSDR_AUDIO_TAG}
+    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/soapysdraudio"
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+    -DUSE_HAMLIB=OFF
+    -DRTAUDIO_FOUND=OFF
+    -DSoapySDR_FOUND=ON
+    -DSoapySDR_INCLUDE_DIRS=${SOAPYSDR_INCLUDE_DIR}
+    -DSoapySDR_LIBRARIES=${SOAPYSDR_LIBRARY}
+    INSTALL_COMMAND ""
+    TEST_COMMAND ""
+    )
+  ExternalProject_Get_Property(soapysdraudio source_dir binary_dir)
+  set(SOAPYSDR_FOUND ON CACHE INTERNAL "")
+  set(SOAPYSDR_INCLUDE_DIR "${source_dir}" CACHE INTERNAL "")
+  if(WIN32)
+    set(SOAPYSDR_LIBRARY "${SDRANGEL_BINARY_LIB_DIR}/SoapyAudio.lib" CACHE INTERNAL "")
+    install(FILES "${SDRANGEL_BINARY_BIN_DIR}/SoapyAudio${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(SOAPYSDR_LIBRARY "${binary_dir}/lib/libSoapySDR${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/lib/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libSoapySDR*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/lib/")
+    else()
+      install(DIRECTORY "${binary_dir}/lib/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libSoapySDR${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif(WIN32)
+endif(OFF)
 
 ############################################################
 ## SDRplay API
@@ -326,101 +430,307 @@ if(ENABLE_SOAPYSDR)
 #        DESTINATION bin
 #    )
 #endif ()
-
 endif(ENABLE_SOAPYSDR)
 
-# already on the respository
-# TODO decide what to do
-if(OFF)
-# needs pkgconfig, libusb, autoconf, automake and libtool
-ExternalProject_Add(perseus
-    GIT_REPOSITORY https://github.com/f4exb/libperseus-sdr.git
-    GIT_TAG afefa23e3140ac79d845acb68cf0beeb86d09028
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/perseus"
+if(ENABLE_PERSEUS AND NOT WIN32)
+  # needs pkgconfig, libusb, autoconf, automake and libtool
+  ExternalProject_Add(perseussdr
+    GIT_REPOSITORY https://github.com/f4exb/libperseus-sdr
+    GIT_TAG ${PERSEUSSDR_TAG}
+    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/perseussdr"
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+        -DLIBUSB_INCLUDE_DIR=${LIBUSB_INCLUDE_DIR}
+        -DLIBUSB_LIBRARIES=${LIBUSB_LIBRARIES}
     INSTALL_COMMAND ""
     TEST_COMMAND ""
-)
+  )
+  ExternalProject_Get_Property(perseussdr source_dir binary_dir)
+  set(LIBPERSEUS_FOUND ON CACHE INTERNAL "")
+  set(LIBPERSEUS_INCLUDE_DIR "${source_dir}" CACHE INTERNAL "")
+  if(WIN32)
+    set(LIBPERSEUS_LIBRARIES "${SDRANGEL_BINARY_LIB_DIR}/perseus-sdr.lib" CACHE INTERNAL "")
+    install(FILES "${SDRANGEL_BINARY_BIN_DIR}/perseus-sdr${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(LIBPERSEUS_LIBRARIES "${binary_dir}/libperseus-sdr${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libperseus-sdr*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}")
+    else()
+      install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libperseus-sdr${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif()
+endif(ENABLE_PERSEUS AND NOT WIN32)
 
-# apt install libairspy-dev
-# needs libusb and pkgconfig
-ExternalProject_Add(airspy
-    GIT_REPOSITORY https://github.com/airspy/airspyone_host.git
-    GIT_TAG bfb667080936ca5c2d23b3282f5893931ec38d3f
+if(ENABLE_AIRSPY)
+  if(WIN32)
+    set(AIRSPY_LIBUSB_INCLUDE_DIR ${LIBUSB_INCLUDE_DIR}/libusb-1.0)
+  else()
+    set(AIRSPY_LIBUSB_INCLUDE_DIR ${LIBUSB_INCLUDE_DIR})
+  endif()
+  # needs libusb, pthreads
+  ExternalProject_Add(airspy
+    GIT_REPOSITORY https://github.com/airspy/airspyone_host
+    GIT_TAG ${AIRSPY_TAG}
+    DEPENDS ${PTHREADS4W_DEPENDS}
     PREFIX "${EXTERNAL_BUILD_LIBRARIES}/airspy"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES}
-)
-# apt install libairspyhf-dev (only on ubuntu 18.04)
-# needs libusb and pkgconfig
-ExternalProject_Add(airspyhf
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+        -DLIBUSB_LIBRARIES=${LIBUSB_LIBRARIES}
+        -DLIBUSB_INCLUDE_DIR=${AIRSPY_LIBUSB_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_INCLUDE_DIR=${PTHREADS4W_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_WIN32_LIBRARY=${PTHREADS4W_LIBRARIES}
+    INSTALL_COMMAND ""
+    TEST_COMMAND ""
+  )
+  ExternalProject_Get_Property(airspy source_dir binary_dir)
+  set(LIBAIRSPY_FOUND ON CACHE INTERNAL "")
+  set(LIBAIRSPY_INCLUDE_DIR "${source_dir}/libairspy/src" CACHE INTERNAL "")
+  if(WIN32)
+    set(LIBAIRSPY_LIBRARIES "${SDRANGEL_BINARY_LIB_DIR}/airspy.lib" CACHE INTERNAL "")
+    makeCopyDir("${source_dir}/libairspy/src" "${source_dir}/libairspy/src/libairspy" airspy)
+    makeCopy("${binary_dir}/airspy-tools/src/airspy${CMAKE_SHARED_LIBRARY_SUFFIX}" "${SDRANGEL_BINARY_BIN_DIR}/airspy${CMAKE_SHARED_LIBRARY_SUFFIX}" airspy)
+    install(FILES "${SDRANGEL_BINARY_BIN_DIR}/airspy${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(LIBAIRSPY_LIBRARIES "${binary_dir}/libairspy/src/libairspy${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    makeLink("${source_dir}/libairspy/src" "${source_dir}/libairspy/src/libairspy" airspy)
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/libairspy/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libairspy*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/libairspy/src")
+    else()
+      install(DIRECTORY "${binary_dir}/libairspy/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libairspy${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif()
+endif(ENABLE_AIRSPY)
+
+if(ENABLE_AIRSPYHF)
+  if(WIN32)
+    set(AIRSPYHF_LIBUSB_INCLUDE_DIR ${LIBUSB_INCLUDE_DIR}/libusb-1.0)
+  else()
+    set(AIRSPYHF_LIBUSB_INCLUDE_DIR ${LIBUSB_INCLUDE_DIR})
+  endif()
+  # needs pkgconfig, libusb, pthreads
+  ExternalProject_Add(airspyhf
     GIT_REPOSITORY https://github.com/airspy/airspyhf.git
-    GIT_TAG 1.1.5
+    GIT_TAG ${AIRSPYHF_TAG}
+    DEPENDS ${PTHREADS4W_DEPENDS}
     PREFIX "${EXTERNAL_BUILD_LIBRARIES}/airspyhf"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES}
-)
-# apt install libhackrf-dev
-# needs pkgconfig, libusb and fftw-3
-ExternalProject_Add(hackrf
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+        -DLIBUSB_LIBRARIES=${LIBUSB_LIBRARIES}
+        -DLIBUSB_INCLUDE_DIR=${AIRSPYHF_LIBUSB_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_INCLUDE_DIR=${PTHREADS4W_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_WIN32_LIBRARY=${PTHREADS4W_LIBRARIES}
+    INSTALL_COMMAND ""
+    TEST_COMMAND ""
+  )
+  ExternalProject_Get_Property(airspyhf source_dir binary_dir)
+  set(LIBAIRSPYHF_FOUND ON CACHE INTERNAL "")
+  set(LIBAIRSPYHF_INCLUDE_DIR "${source_dir}/libairspyhf/src" CACHE INTERNAL "")
+  if(WIN32)
+    set(LIBAIRSPYHF_LIBRARIES "${SDRANGEL_BINARY_LIB_DIR}/airspyhf.lib" CACHE INTERNAL "")
+    makeCopyDir("${source_dir}/libairspyhf/src" "${source_dir}/libairspyhf/src/libairspyhf" airspyhf)
+    install(FILES "${SDRANGEL_BINARY_BIN_DIR}/airspyhf${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(LIBAIRSPYHF_LIBRARIES "${binary_dir}/libairspyhf/src/libairspyhf${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    makeLink("${source_dir}/libairspyhf/src" "${source_dir}/libairspyhf/src/libairspyhf" airspyhf)
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/libairspyhf/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libairspyhf*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/libairspyhf/src")
+    else()
+      install(DIRECTORY "${binary_dir}/libairspyhf/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libairspyhf${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif()
+endif(ENABLE_AIRSPYHF)
+
+if(ENABLE_HACKRF)
+
+  # SOURCE_SUBDIR require cmake 3.7.0
+  # otherwise use CONFIGURE_COMMAND
+  cmake_minimum_required(VERSION 3.7.0)
+
+  # needs pkgconfig, libusb, fftw, pthreads
+  if(WIN32)
+    set(HACKRF_LIBUSB_INCLUDE_DIR ${LIBUSB_INCLUDE_DIR}/libusb-1.0)
+  else()
+    set(HACKRF_LIBUSB_INCLUDE_DIR ${LIBUSB_INCLUDE_DIR})
+  endif()
+  ExternalProject_Add(hackrf
     GIT_REPOSITORY https://github.com/mossmann/hackrf.git
-    GIT_TAG v2018.01.1
+    GIT_TAG ${HACKRF_TAG}
+    GIT_SUBMODULES ""
+    DEPENDS ${PTHREADS4W_DEPENDS}
     PREFIX "${EXTERNAL_BUILD_LIBRARIES}/hackrf"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES}
-    SOURCE_SUBDIR host/
-)
-# apt install librtlsdr-dev
-# needs pkgconfig and libusb
-ExternalProject_Add(rtlsdr
-    GIT_REPOSITORY https://github.com/osmocom/rtl-sdr.git
-    GIT_TAG f68bb2fa772ad94f58c59babd78353667570630b
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/rtlsdr"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES}
-)
-# apt install libbladerf-dev
-# needs pkgconfig and libusb
-ExternalProject_Add(bladerf
-    GIT_REPOSITORY https://github.com/Nuand/bladeRF.git
-    GIT_TAG 1da130cb5ac9e9f722737e9aee141ecccebef00d
-    GIT_SUBMODULES
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/bladerf"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES}
-)
-# apt install liblimesuite-dev (only on ubuntu 18.04)
-# needs pkgconfig, libusb and sqlite3
-ExternalProject_Add(limesuite
-    GIT_REPOSITORY https://github.com/myriadrf/LimeSuite.git
-    GIT_TAG v19.01.0
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/limesuite"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES} -DLIME_SUITE_EXTVER=release -DENABLE_GUI=OFF -DENABLE_NOVENARF7=OFF -DENABLE_SOAPY_LMS7=OFF -DENABLE_OCTAVE=OFF
-)
-# apt install libmirisdr-dev
-# needs pkgconfig and libusb
-ExternalProject_Add(mirisdr
-    GIT_REPOSITORY https://github.com/f4exb/libmirisdr-4.git
-    GIT_TAG v1.1.2
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/mirisdr"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES}
-)
-# apt install libiio-dev
-# needs pkgconfig, libusb, libxml2, lzma, xz, libiconv
-ExternalProject_Add(libiio
+    SOURCE_SUBDIR "host/libhackrf"
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+        -DLIBUSB_LIBRARIES=${LIBUSB_LIBRARIES}
+        -DLIBUSB_INCLUDE_DIR=${HACKRF_LIBUSB_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_INCLUDE_DIR=${PTHREADS4W_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_WIN32_LIBRARY=${PTHREADS4W_LIBRARIES}
+        -DFFTW_INCLUDES=${FFTW3F_INCLUDE_DIRS}
+        -DFFTW_LIBRARIES=${FFTW3F_LIBRARIES}
+    INSTALL_COMMAND ""
+    TEST_COMMAND ""
+  )
+  ExternalProject_Get_Property(hackrf source_dir binary_dir)
+  set(LIBHACKRF_FOUND ON CACHE INTERNAL "")
+  set(LIBHACKRF_INCLUDE_DIR "${source_dir}/host/libhackrf" CACHE INTERNAL "")
+  if(WIN32)
+    set(LIBHACKRF_LIBRARIES "${SDRANGEL_BINARY_LIB_DIR}/hackrf.lib" CACHE INTERNAL "")
+    # include "libhackrf/hackrf.h"
+    makeCopyDir("${source_dir}/host/libhackrf/src" "${source_dir}/host/libhackrf/libhackrf" hackrf)
+    install(FILES "${SDRANGEL_BINARY_BIN_DIR}/hackrf${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(LIBHACKRF_LIBRARIES "${binary_dir}/src/libhackrf${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    # include "libhackrf/hackrf.h"
+    makeLink("${source_dir}/host/libhackrf/src" "${source_dir}/host/libhackrf/libhackrf" hackrf)
+    if(APPLE)
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/")
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libhackrf*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    else()
+      install(DIRECTORY "${binary_dir}/src/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libhackrf${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif()
+endif(ENABLE_HACKRF)
+
+if(ENABLE_IIO)
+  if(WIN32)
+    ExternalProject_Add(libxml2
+      GIT_REPOSITORY https://github.com/GNOME/libxml2.git
+      GIT_TAG ${LIBXML2_TAG}
+      PREFIX "${EXTERNAL_BUILD_LIBRARIES}/libxml2"
+      BUILD_IN_SOURCE 1
+      CONFIGURE_COMMAND cd <SOURCE_DIR>/win32 && cscript configure.js compiler=msvc iconv=no
+      BUILD_COMMAND cd <SOURCE_DIR>/win32 && nmake -f Makefile.msvc
+      INSTALL_COMMAND ""
+      TEST_COMMAND ""
+    )
+  else()
+    if(APPLE)
+      set(LIBXML2_PATCH_COMMAND /usr/bin/sed -i '' "s/libtoolize/glibtoolize/g" autogen.sh)
+    endif(APPLE)
+
+    ExternalProject_Add(libxml2
+      GIT_REPOSITORY https://github.com/GNOME/libxml2.git
+      GIT_TAG ${LIBXML2_TAG}
+      PREFIX "${EXTERNAL_BUILD_LIBRARIES}/libxml2"
+      BUILD_IN_SOURCE 1
+      PATCH_COMMAND ${LIBXML2_PATCH_COMMAND}
+      CONFIGURE_COMMAND ./autogen.sh
+      BUILD_COMMAND make
+      INSTALL_COMMAND ""
+      TEST_COMMAND ""
+    )
+  endif(WIN32)
+  ExternalProject_Get_Property(libxml2 source_dir binary_dir)
+  set(LIBXML2_DEPENDS libxml2)
+  set(LIBXML2_FOUND ON CACHE INTERNAL "")
+  set(LIBXML2_INCLUDE_DIR "${source_dir}/include" CACHE INTERNAL "")
+  if(WIN32)
+    set(LIBXML2_LIBRARIES "${source_dir}/win32/bin.msvc/libxml2.lib" CACHE INTERNAL "")
+    makeCopy("${source_dir}/win32/bin.msvc/libxml2${CMAKE_SHARED_LIBRARY_SUFFIX}" "${SDRANGEL_BINARY_BIN_DIR}/libxml2${CMAKE_SHARED_LIBRARY_SUFFIX}" libxml2)
+    install(FILES "${source_dir}/win32/bin.msvc/libxml2${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(LIBXML2_LIBRARIES "${source_dir}/.libs/libxml2${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    if(APPLE)
+      install(DIRECTORY "${source_dir}/.libs/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libxml2*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${source_dir}/.libs")
+    else()
+      install(DIRECTORY "${source_dir}/.libs/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libxml2${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif(WIN32)
+
+  # needs pkgconfig, libusb, pthreads, libxml2
+  ExternalProject_Add(iio
     GIT_REPOSITORY https://github.com/analogdevicesinc/libiio.git
-    GIT_TAG 826563e41b5ce9890b75506f672017de8d76d52d
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/libiio"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES} -DOSX_PACKAGE=OFF -DWITH_DOC=OFF
-)
-# apt install libsoapysdr-dev (only on ubuntu 18.04)
-ExternalProject_Add(soapysdr
-    GIT_REPOSITORY https://github.com/pothosware/SoapySDR.git
-    GIT_TAG soapy-sdr-0.7.1
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/soapysdr"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES} -DENABLE_PYTHON=OFF -DENABLE_PYTHON3=OFF
-)
-# TODO: sdrplay is binary only!
-# needs soapysdr, sdrplay
-ExternalProject_Add(soapysdrplay
-    GIT_REPOSITORY https://github.com/pothosware/SoapySDRPlay.git
-    GIT_TAG soapy-sdrplay-0.2.0
-    DEPENDS soapysdr
-    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/soapysdrplay"
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${EXTERNAL_INSTALL_LIBRARIES} -DCMAKE_BUILD_TYPE=Release
-)
-endif(OFF)
+    GIT_TAG ${IIO_TAG}
+    DEPENDS ${PTHREADS4W_DEPENDS} ${LIBXML2_DEPENDS}
+    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/iio"
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+        -DLIBUSB_LIBRARIES=${LIBUSB_LIBRARIES}
+        -DLIBUSB_INCLUDE_DIR=${LIBUSB_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_INCLUDE_DIR=${PTHREADS4W_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_WIN32_LIBRARY=${PTHREADS4W_LIBRARIES}
+        -DLIBXML2_INCLUDE_DIR=${LIBXML2_INCLUDE_DIR}
+        -DLIBXML2_LIBRARIES=${LIBXML2_LIBRARIES}
+        -DCSHARP_BINDINGS=OFF
+        -DPYTHON_BINDINGS=OFF
+        -DWITH_MATLAB_BINDINGS_API=OFF
+        -DOSX_PACKAGE=OFF
+    INSTALL_COMMAND ""
+    TEST_COMMAND ""
+  )
+  ExternalProject_Get_Property(iio source_dir binary_dir)
+  set(LIBIIO_FOUND ON CACHE INTERNAL "")
+  set(LIBIIO_INCLUDE_DIR "${source_dir}" CACHE INTERNAL "")
+  if(WIN32)
+    set(LIBIIO_LIBRARIES "${SDRANGEL_BINARY_LIB_DIR}/libiio.lib" CACHE INTERNAL "")
+    install(FILES "${SDRANGEL_BINARY_BIN_DIR}/libiio${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(LIBIIO_LIBRARIES "${binary_dir}/libiio${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libiio*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      string(REPLACE "v" "" IIO_VERSION ${IIO_TAG})
+      makeCopy("${binary_dir}/iio.framework/Versions/${IIO_VERSION}/iio" "${binary_dir}/libiio${CMAKE_SHARED_LIBRARY_SUFFIX}" iio)
+      add_custom_command(TARGET iio POST_BUILD COMMAND install_name_tool -id "${binary_dir}/libiio${CMAKE_SHARED_LIBRARY_SUFFIX}" "${binary_dir}/libiio${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}")
+    else()
+      install(DIRECTORY "${binary_dir}/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libiio${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif()
+endif(ENABLE_IIO)
+
+if(ENABLE_BLADERF)
+  # needs pkgconfig, libusb, pthreads
+  ExternalProject_Add(bladerf
+    GIT_REPOSITORY https://github.com/Nuand/bladeRF.git
+    GIT_TAG ${BLADERF_TAG}
+    DEPENDS ${PTHREADS4W_DEPENDS}
+    PREFIX "${EXTERNAL_BUILD_LIBRARIES}/bladerf"
+    CMAKE_ARGS ${DEFAULT_OUTPUT_DIRECTORIES}
+        -DPKG_CONFIG_EXECUTABLE=${PKG_CONFIG_EXECUTABLE}
+        -DENABLE_BACKEND_USB=ON
+        -DENABLE_BACKEND_LIBUSB=ON
+        -DLIBUSB_HEADER_FILE=${LIBUSB_INCLUDE_DIR}/libusb-1.0/libusb.h
+        -Dusb_LIBRARY=${LIBUSB_LIBRARIES}
+        -DLIBUSB_PATH=${EXTERNAL_LIBRARY_FOLDER}/libusb
+        -DTHREADS_PTHREADS_INCLUDE_DIR=${PTHREADS4W_INCLUDE_DIR}
+        -DTHREADS_PTHREADS_WIN32_LIBRARY=${PTHREADS4W_LIBRARIES}
+        -DLIBPTHREADSWIN32_PATH=${PTHREADS4W_INCLUDE_DIR}
+        -DENABLE_FX3_BUILD=OFF
+        -DENABLE_HOST_BUILD=ON
+        -DENABLE_BACKEND_CYAPI=OFF
+        -DTREAT_WARNINGS_AS_ERRORS=OFF
+    INSTALL_COMMAND ""
+    TEST_COMMAND ""
+  )
+  ExternalProject_Get_Property(bladerf source_dir binary_dir)
+  set(LIBBLADERF_FOUND ON CACHE INTERNAL "")
+  set(LIBBLADERF_INCLUDE_DIRS "${source_dir}/host/libraries/libbladeRF/include" CACHE INTERNAL "")
+  if(WIN32)
+    set(LIBBLADERF_LIBRARIES "${SDRANGEL_BINARY_LIB_DIR}/bladeRF.lib" CACHE INTERNAL "")
+    install(FILES "${SDRANGEL_BINARY_BIN_DIR}/bladeRF${CMAKE_SHARED_LIBRARY_SUFFIX}" DESTINATION "${INSTALL_LIB_DIR}")
+  else()
+    set(LIBBLADERF_LIBRARIES "${binary_dir}/host/output/libbladeRF${CMAKE_SHARED_LIBRARY_SUFFIX}" CACHE INTERNAL "")
+    if(APPLE)
+      install(DIRECTORY "${binary_dir}/host/output/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libbladeRF*${CMAKE_SHARED_LIBRARY_SUFFIX}")
+      set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP};${binary_dir}/host/output")
+    else()
+      install(DIRECTORY "${binary_dir}/host/output/" DESTINATION "${INSTALL_LIB_DIR}"
+        FILES_MATCHING PATTERN "libbladeRF${CMAKE_SHARED_LIBRARY_SUFFIX}*")
+    endif(APPLE)
+  endif()
+endif(ENABLE_BLADERF)
+
+# needed by fixup_bundle() on macOS
+set(MACOS_EXTERNAL_LIBS_FIXUP "${MACOS_EXTERNAL_LIBS_FIXUP}" CACHE INTERNAL "")

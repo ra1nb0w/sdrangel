@@ -26,4 +26,11 @@ target_link_libraries(perseusdevice
     sdrbase
 )
 
+if(ENABLE_EXTERNAL_LIBRARIES)
+    include_directories(
+        ${LIBUSB_INCLUDE_DIR}
+    )
+    add_dependencies(perseusdevice perseussdr)
+endif()
+
 install(TARGETS perseusdevice DESTINATION ${INSTALL_LIB_DIR})

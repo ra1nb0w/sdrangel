@@ -222,7 +222,7 @@ elseif (WIN32)
 
   # ffmpeg
   set(FFMPEG_INCLUDE_DIRS "${EXTERNAL_LIBRARY_FOLDER}/ffmpeg/include" CACHE INTERNAL "")
-  #set(FFMPEG_LIBRARIES)
+  set(FFMPEG_LIBRARIES "${EXTERNAL_LIBRARY_FOLDER}/ffmpeg/bin" CACHE INTERNAL "")
   set(AVCODEC_INCLUDE_DIRS "${EXTERNAL_LIBRARY_FOLDER}/ffmpeg/include" CACHE INTERNAL "")
   set(AVCODEC_LIBRARIES "${EXTERNAL_LIBRARY_FOLDER}/ffmpeg/lib/avcodec.lib" CACHE INTERNAL "")
   set(AVFORMAT_INCLUDE_DIRS "${EXTERNAL_LIBRARY_FOLDER}/ffmpeg/include" CACHE INTERNAL "")
@@ -332,12 +332,24 @@ if(WIN32)
   set(OpenCV_LIBS "${OpenCV_LIBS}" CACHE INTERNAL "")
 
   # add libs folder for fixup_bundle()
-  get_filename_component(GFN_Boost_LIBS_DIR Boost_LIBS DIRECTORY)
-  get_filename_component(GFN_OpenCV_LIBS_DIR OpenCV_LIBS DIRECTORY)
+  get_filename_component(GFN_Boost_LIBS_DIR "${Boost_LIBS}" DIRECTORY)
+
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(OpenCV_ARCH "64")
+  elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+    set(OpenCV_ARCH "86")
+  endif()
+
+  if(VS2015)
+    set(OpenCV_LIBS_BIN_DIR "${OpenCV_DIR}/x${OpenCV_ARCH}/vc14/bin" CACHE INTERNAL "")
+  elseif(VS2017)
+    set(OpenCV_LIBS_BIN_DIR "${OpenCV_DIR}/x${OpenCV_ARCH}/vc15/bin" CACHE INTERNAL "")
+  endif()
+
   set(WINDOWS_FIXUP_BUNDLE_LIB_DIRS
     "${WINDOWS_FIXUP_BUNDLE_LIB_DIRS}"
     "${GFN_Boost_LIBS_DIR}"
-    "${GFN_OpenCV_LIBS_DIR}"
+    "${OpenCV_LIBS_BIN_DIR}"
   )
 endif()
 
