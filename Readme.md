@@ -16,6 +16,7 @@ The server variant does not need a graphical display and therefore OpenGL suppor
 
 <h2>Repository branches</h2>
 
+- cmake: build system refactory with many patches to build the code on every platform
 - master: the production branch
 - dev: the development branch
 - legacy: the modified code from the parent application [hexameron rtl-sdrangelove](https://github.com/hexameron/rtl-sdrangelove) before a major redesign of the code was carried out and sync was lost.
@@ -74,70 +75,345 @@ The audio devices with Qt are supported through pulseaudio and unless you are us
 
 In case you cannot see anything related to HDMI or your desired audio device in pavucontrol just restart pulseaudio with `pulseaudio -k` (`-k` kills the previous instance before restarting) and do the above steps again.
 
-<h1>Software build on Linux</h1>
+# Build
 
-Plese consult the [Wiki page for compilation in Linux](https://github.com/f4exb/sdrangel/wiki/Compile-from-source-in-Linux). The notes below are left for further information if needed although you should be all set with the Wiki.
+## Generic
 
-<h2>Qt version</h2>
+### Requirements
 
-To be sure you will need at least Qt version 5.5. It definitely does not work with versions earlier than 5.3 but neither 5.3 nor 5.4 were tested.
+- cpu with SSSE3 (x86 architecture) or Neon (arm architecture)
+- compiler that supports full c++11 specification (gcc, clang or msvc)
+- cmake >= 3.1
+- Qt >= 5.5 (this version is only to define a lower bound)
+- Boost
+- pkg-config
+- fftw3f
+- libusb
+- opencv
+- other libraries can be installed based on personal usage
+  or can be built internally with `-DENABLE_EXTERNAL_LIBRARIES=ON`
+  see CMake Options paragraph.
 
-  - Linux builds are made with 5.5.1 (Xenial), 5.9 (Artful, Stretch, Bionic) and 5.11 (Cosmic)
-  - Windows build is made with 5.10.1 and has Qt ANGLE support (OpenGL emulation with DirectX)
+### Build
 
-&#9758; From version 3.12.0 the Linux binaries are built with the 24 bit Rx option.
+- done like every other cmake project
+   
+  ```
+  mkdir build && cd build
+  cmake .. [OPTIONS]
+  make
+  ```
+     
+- if you would like to install the project
 
-<h2>Ubuntu</h2>
+  ```
+  make install
+  ```
 
-  - `sudo apt-get install cmake g++ pkg-config libfftw3-dev libqt5multimedia5-plugins qtmultimedia5-dev qttools5-dev qttools5-dev-tools libqt5opengl5-dev qtbase5-dev libusb-1.0 librtlsdr-dev libboost-all-dev libasound2-dev pulseaudio libopencv-dev libsqlite3-dev libxml2-dev bison flex ffmpeg libavcodec-dev libavformat-dev libopus-dev`
+### Usage
+- run the binary `./sdrangel` for the gui or `./sdrangelsrv` for the server.
+- all libs and plugins are on `libs/` and `${prefix}/lib/sdrangel` when install.
 
-<h2>Debian</h2>
+## Debian and Derivatives
 
-  - `sudo apt-get install cmake g++ pkg-config libfftw3-dev libusb-1.0-0-dev libusb-dev qt5-default qtbase5-dev qtchooser libqt5multimedia5-plugins qtmultimedia5-dev qttools5-dev qttools5-dev-tools libqt5opengl5-dev qtbase5-dev librtlsdr-dev libboost-all-dev libasound2-dev pulseaudio libopencv-dev libsqlite3-dev libxml2-dev bison flex ffmpeg libavcodec-dev libavformat-dev libopus-dev`
+### Requirements
 
-<h2>openSUSE</h2>
+for a full packages list you should check the following files:
+  
+  - .travis.yml for Ubuntu 16.04
+  - .appveyor.yml for Ubuntu 18.04
+  - debian/control for a basic one
 
-  - `sudo zypper install Mesa-libGL1 Mesa-libEGL-devel Mesa-libGL-devel Mesa-libGLESv1_CM-devel Mesa-libGLESv2-devel Mesa-libGLESv3-devel Mesa-libglapi-devel libOSMesa-devel`
-  - `sudo zypper install cmake fftw3-devel gcc-c++ libusb-1_0-devel libqt5-qtbase-devel libQt5OpenGL-devel libqt5-qtmultimedia-devel libqt5-qttools-devel libQt5Network-devel libQt5Widgets-devel boost-devel alsa-devel pulseaudio opencv-devel`
+then you need to install devices driver and optionally external libraries;
+essentially there are two ways:
 
-  - Note1: if you are on Leap you will need a more recent g++ compiler so in place of `gcc-c++` use `gcc6-c++` or `gcc7-c++` then add the following in the cmake command: `-DCMAKE_C_COMPILER=/usr/bin/gcc-7 -DCMAKE_CXX_COMPILER=/usr/bin/g++-7` (for gcc 7) and then `-DCMAKE_INSTALL_PREFIX:PATH=...` for the custom install path (not `-DCMAKE_INSTALL_PREFIX=...`)
-  - Note2 for udev rules: installed udev rules for BladeRF and HackRF are targeted at Debian or Ubuntu systems that have a plugdev group for USB hotplug devices. This is not the case in openSUSE. To fix it you can either:
-    - make the udev rules file compatible just remove the `GROUP` parameter on all lines and change `MODE` parameter to `666`.
-    - create a `plugdev` group and add it tou your user group list: `sudo groupadd plugdev` then `sudo usermod -G plugdev -a <user>`
-  - Note3: A package has been created in openSUSE thanks to Martin, see: [sdrangel](https://build.opensuse.org/package/show/hardware:sdr/sdrangel). It is based on the latest release on master branch.
+  - preferred mode: use the distribution one like
 
-<h2>Fedora</h2>
+  ```
+  sudo apt-get install airspy
+  ```
+  
+  and if not provided use `cmake/ci/build_*.sh` scripts that build and
+  install the desired software; remember that the build scripts
+  use `${HOME}/external` as base directory.
 
-This has been tested with Fedora 23 and 22:
+  - use `-DENABLE_EXTERNAL_LIBRARIES=ON` as cmake option to build
+    internally all dependencies and drivers. This can be used with debuild;
+    take in consideration that this doesn't include udev rules yet.
 
-  - `sudo dnf groupinstall "C Development Tools and Libraries"`
-  - `sudo dnf install mesa-libGL-devel`
-  - `sudo dnf install cmake gcc-c++ pkgconfig fftw-devel libusb-devel qt5-qtbase-devel qt5-qtmultimedia-devel qt5-qttools-devel boost-devel pulseaudio alsa-lib-devel`
+### Build
 
-  - Note for udev rules: the same as for openSUSE applies. This is detailed in the previous paragraph for openSUSE.
+  - cmake options can be declared with (on zsh/bash like shell)
 
-<h2>Arch Linux / Manjaro</h2>
+    ```
+    export CMAKE_CUSTOM_OPTIONS="-DFORCE_SSE41=ON"
+    ```
 
-Tested with the 15.09 version with LXDE desktop (community supported). The exact desktop environment should not matter anyway. Prerequisites should be similar for Arch and all derivatives.
+  - then you can run the debian build package
 
-`sudo pacman -S cmake pkg-config fftw qt5-multimedia qt5-tools qt5-base libusb boost boost-libs pulseaudio`
+    ```
+    debuild --preserve-envvar CMAKE_CUSTOM_OPTIONS -i -us -uc -b
+    ```
 
-  - Note1 for udev rules: the same as for openSUSE and Fedora applies.
-  - Note2: Two package are avaliable in the AUR (thanks Mikos!), [sdrangel](https://aur.archlinux.org/packages/sdrangel), which provides the lastest tagged release (stable), and [sdrangel-git](https://aur.archlinux.org/packages/sdrangel-git), which builds the latest commit from this repository (unstable).
+at the end of process you will find the deb package on ../
 
-<h1>Compile for Windows</h1>
+### Usage
 
-This is a rather long story and one may prefer using the software distribution instead. However the brave may follow [this link](ReadmeWindowsBuild.md)
+when you have the .deb you can install the package on the system with
 
-<h1>Compile for Mac O/S</h1>
+```
+sudo dpkg -i sdrangel_*.deb
+```
 
-A Mac O/S build was contributed from version 2.0.1. Please be aware that this is still experimental. In the [SDRangel discussion group](https://groups.io/g/sdrangel) Mac O/S users have discussed the matter extensively and produced builds. It could be a good idea to check it.
+and you find a startup link on your menu. remove the package is easy
 
-<h1>Compile for Android</h1>
+```
+sudo apt-get remove sdrangel
+```
 
-Despite several attempts and the presence of Android related stuff still present in the .pro files there is no Android build available. An APK can be built but Qt fails miserably at porting applications other than its ridiculously simple examples. When multi-threading is involved a lot like in SDRangel this simply crashes at the very beginning of the application when starting the event loop.
+## Windows
 
-Contributors welcome!
+### Requirements
+
+- Win7, Win10, Win server 2012 or 2016 64bit
+- MSVC 2015/2017
+- Qt installed on default directory or use `-DQT_PATH=C:\path_qt\` and `-DQT_MISSING=OFF` as parameters for cmake
+- cmake (add to the path `SET PATH=%PATH%;d:\CMake\bin` if not present)
+- nsis
+
+### Build
+
+- clone the repository with git (in this case)
+
+  ```
+  git clone -b cmake https://github.com/ra1nb0w/sdrangel.git
+  ```
+
+- enter on the repository with
+
+  ```
+  cd sdrangel
+  ```
+
+- get submodule that contains basic windows libraries already built
+
+  ```
+  git submodule update --init --recursive
+  ```
+
+- now prepare the environment (I use cmd.exe as terminal)
+
+  ```
+  set "CMAKE_GENERATOR=Visual Studio 15 2017 Win64"
+  set "CMAKE_CUSTOM_OPTIONS=-DFORCE_SSE41=ON"
+  ```
+  
+  use the following if you are using MSVC 2015
+
+  ```
+  set "CMAKE_GENERATOR=Visual Studio 14 2015 Win64"
+  ```
+
+  and if you want native cpu flags omits `CMAKE_CUSTOM_OPTIONS`;
+  for more option, read the paragraph at the end of this e-mail.
+
+- start the build and packaging phases
+
+  ```
+  cmake\ci\build_sdrangel.bat
+  ```
+
+- at the end of the build, and only if success, you obtain a .zip
+  and an installer with sdrangel and sdrangelsrv, all plugins, all
+  dependencies and all devices except perseus-sdr and soapysdrplay.
+  Both contains vcdistr and the installer automatically install it
+  if not found on the system.
+  An installer example can be found at this url [1]; built on Win7
+  with MSVC 2017.
+
+### Usage
+
+- the code can be run from bin/ folder, the folder on the zip or
+  installed on the system with the installer; the last one install
+  also an icon on your start menu.
+  on your start menu.
+
+### Notes
+
+- this build is on par with linux features
+- build tested only in 64bit mode
+- basic library like, boost, opencv, libusb, are already built and
+  can be found at external/windows
+- all dependencies, like cm256cc are build from sources
+- all devices are built from source and cmake install only the
+  required library so can be cases where the device doesn't work. I
+  only have rtlsdr, limesdr and sdrplay (not included yet) therefore
+  test your hardware and post the error shown on console if something
+  doesn't work.
+
+## macOS
+
+### Requirements
+
+all dependencies and device drivers are available on macports [2] and
+can be seen on .travis.yml; see line with `sudo port -N -k install`.
+when all my changes will be on master I will push SDRangel on macports
+so will be easy to install it; you will only need to run the following
+command
+
+```
+sudo port install sdrangel
+```
+
+and you find an .app on Applications.<br>
+For the moment you can use the following instructions
+
+- first of all install macports following
+  [macports install](https://www.macports.org/install.php); you also need XCode 10.
+
+- create a temporary folder, like
+
+  ```
+  mkdir -p ~/tmp/SDRangel && cd ~/tmp/SDRangel
+  ```
+
+- download port file on that directory
+
+  ```
+  curl -O https://raw.githubusercontent.com/ra1nb0w/macports-ports/sdrangel/science/SDRangel/Portfile
+  ```
+
+- add your variants to the end of default_variants of Portfile like
+
+  ```
+  default_variants +soapysdr +rtlsdr +funcube +server +gui +native +limesuite
+  ```
+
+  remember to choose your device, see variant lines.
+
+- then build and install with
+
+  ```
+  sudo port install
+  ```
+
+- at the end you have the app at /Applications/MacPorts/SDRangel.app
+
+### Build
+
+it is quite the same as generic
+
+```
+mkdir build && cd build
+cmake ..
+make
+```
+
+if you like to get .dmg with the .app and all dependencies included use the
+following command
+
+```
+mkdir build && cd build
+cmake .. -DBUNDLE=ON
+make package
+```
+
+remember that this activate/include only libraries present on the
+system; if you want to build everything without installing it with
+macports (except required libraries) use the cmake option
+`-DENABLE_EXTERNAL_LIBRARIES=ON`.
+
+### Usage
+
+- if built without bundle run it as generic `./sdrangel` or `./sdrangelsrv`
+- if built with bundle, install SDRangel.app like all other software
+
+### Notes
+
+- when build the bundle for distribution takes into account the
+  variable CMAKE_OSX_DEPLOYMENT_TARGET or use the minimum macOS
+  version.
+- if you build with macOS 10.14 and macports qt5-qtbase can be high
+  cpu usage of sdrangel; this is an upstream bug that will be fixed.
+
+
+## CMake options
+
+there are many options for cmake and you can find it in the head of
+CMakeLists.txt; them most important  are:
+
+- `ENABLE_EXTERNAL_LIBRARIES` build and install useful libraries and
+  devices driver; the list can be seen on external/CMakeLists.txt;<br>
+  *default: off*
+- `BUNDLE` generate the package at the end of the build; always enabled
+  on windows and optionally on macOS. On Linux every distribution has
+  its tools to create the package.<br>
+  *default: off*
+- `ENABLE_*` enable or disable device support;
+  default: all are enabled and the build will be done if the library
+  is discovered.<br>
+  *default: on*
+- `BUILD_SERVER` or `BUILD_GUI` to choose which binary build.<br>
+  *default: both are enabled*
+- `FORCE_SSSE3` or `FORCE_SSE41` to disable cpu flags auto-discovery; very
+  useful when create a package that should be distributed.<br>
+  *default: off* and auto-discovery is used
+- `DEBUG_OUTPUT` show more log during execution; impact cpu usage<br>
+  *default: off*
+- `CMAKE_INSTALL_PREFIX` where to install the binaries and the libraries<br>
+  *default: system dependent*
+- `CMAKE_BUILD_TYPE` choose the type of the build; see
+  https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html<br>
+  *default: Release*
+
+You can also use cmake-gui o ncurses frontend; from terminal you can
+use
+
+```
+cmake -LAH
+```
+
+  to see all variables.
+
+## Continuous integrator
+
+I implemented the code and configuration to support two continuous
+integrator [3] that verify that build and packing work on Ubuntu
+16.04, Ubuntu 18.05, macOS (4 versions), Windows MSVC 2015 and MSVC
+2017. In total they run 13 VMs.  This permit to check easily that your
+changes doesn't break on some platforms. Testing is always boring and
+error-prone so declare it facilitate the life. Further, you can use
+the result (package) to auto deploy on github every time you tag the
+code. Not done yet but very easy to implement.
+
+Both use scripts present on the `cmake/ci/` folder.
+
+### travis-ci
+
+defined by .travis.yml and test the code on Ubuntu 16.04 and macOS
+10.11, 10.12, 10.13 and 10.14..
+
+### appveyor
+
+introduced because support Ubuntu 18.04 and has Windows with Qt
+already installed.
+defined by .appveyor.yml and test the code con Windows Server 2016
+with MSVC 2017, Windows Server 2012 with MSVC 2015 and Ubuntu 18.04.
+
+## Final notes
+
+- surely I forgot something to say so please don't esitate to ask.
+- I did so many changes on the code to support all platforms that I
+  don't remember therefore the best way to understand it is to grasp
+  them from commit messages.
+- Sorry for the uncorrelated/inconsistent commit messages; I promise
+  to myself that at the end of the work, and so now, I would have
+  reorganized them but they are already upstream so it is dangerous
+  to touch it. Again, I am sorry.
+- the new build system based on cmake should require a long
+  explanation, also because it is a quite complex project with many
+  libraries, plugins and all external dependencies, but for the moment
+  I have not other time to dedicate so ping me with your questions.
 
 <h1>Supported hardware</h1>
 
@@ -321,51 +597,6 @@ If you are not comfortable with this just do not install DSDcc and/or mbelib and
 
   - For Linux distributions: `plugins/channel/libdemoddsd.so`
   - For Windows distribution: `dsdcc.dll`, `mbelib.dll`, `plugins\channel\demoddsd.dll`
-
-<h1>Software distributions</h1>
-
-In the [releases](https://github.com/f4exb/sdrangel/releases) section one can find binary distributions for some Debian based distributions:
-
-  - Ubuntu 18.10 (Cosmic)
-  - Ubuntu 18.04 (Bionic)
-  - Ubuntu 16.04 (Xenial)
-  - Debian Stretch
-
-<h2>Debian distributions</h2>
-
-It is provided in the form of .deb packages for x86_64 architectures with SSE 4.1 support.
-
-Install it as usual for .deb packages:
-
-  - Make sure the `universe` repository is in your `/etc/apt/sources.list`
-
-Prior to apt-get v 1.1 (before Ubuntu 16.04) in a terminal do:
-
-  - `sudo apt-get update`
-  - `sudo apt-get upgrade`
-  - `sudo dpkg -i sdrangel_vx.y.z-1_amd64.deb` where x.y.z is the version number
-  - `sudo apt-get -f install` this will install missing dependencies
-
-Since apt-get v 1.1 installation is possible from a local file:
-
-  - cd to where the archive has been downloaded
-  - `sudo apt-get install ./sdrangel_vx.y.z-1_amd64.deb` where x.y.z is the version number
-  - `sudo apt-get -f install` this will install missing dependencies
-
-The software is installed in `/opt/sdrangel` you can start it from the command line with:
-  - `/opt/sdrangel/bin/sdrangel`
-
-**&#9888;** The udev rules are not set by the package installation so you will have to set it manually in order to be able to access the various SDR hardware. The `udev-rules` folder contains the rules file and the `install.sh` script that you can run as sudo to install all rules files. You may also adapt the script to copy only the required files.
-
-<h3>Ubuntu 18.04</h2>
-
-The default CPU governor is now `powersave` which exhibits excessive CPU usage when running SDRangel. In the case of benchmarking and maybe high throughput usage it is recommended to switch to `performance` before running SDRangel by running the command: `sudo cpupower frequency-set --governor performance`. You can turn it back to `powersave` any time by running: `sudo cpupower frequency-set --governor powersave`. It is normal that with a lower CPU frequency the relative CPU usage rises for the same actual load. If not impairing operation this is normal and overall beneficial for heat and power consumption.
-
-<h2>Windows distribution</h2>
-
-This is the archive of the complete binary distribution that expands to the `sdrangel` directory. You can install it anywhere you like and click on `sdrangel.exe` to start.
-
-<b>&#9888; Windows distribution is provided as a by product thanks to the Qt toolchain. The platform of choice to run SDRangel is definitely Linux and very little support can be given for this Windows distribution.</b>
 
 <h1>Features</h1>
 
